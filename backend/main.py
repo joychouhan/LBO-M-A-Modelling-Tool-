@@ -1,9 +1,8 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import yfinance as yf
 import numpy_financial as npf
 import requests
-from curl_cffi import requests as curl_requests
 
 app = FastAPI()
 
@@ -14,23 +13,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# A browser-like session so Yahoo Finance doesn't block requests coming
-# from a cloud host's IP address. Reused across all yfinance calls.
-yf_session = curl_requests.Session(impersonate="chrome")
-
-# Yahoo requires a "crumb" token tied to cookies before it will serve data.
-# Hitting this URL once at startup sets those cookies on our session so
-# later requests aren't rejected with an "Invalid Crumb" error.
-try:
-    yf_session.get("https://fc.yahoo.com")
-except Exception:
-    pass
+FMP_API_KEY = os.environ.get("FMP_API_KEY")
+FMP_BASE = "https://financialmodelingprep.com/stable"
 
 
 def get_ebitda(ticker):
-    stock = yf.Ticker(ticker, session=yf_session)
-    info = stock.info
-    return info.get("ebitda")
+    url = f"{FMP_BASE}/income-statement"
+    params = {"symbol": ticker, "apikey": FMP_API_KEY}
+    response = requests.get(url, params=params)
+    data = response.json()
+    if not data or not isinstance(data, list):
+        return None
+    return data[0].get("ebitda")
 
 
 def entry_valuation(ebitda, multiple):
@@ -81,28 +75,42 @@ def calculate_returns(equity_invested, ending_ebitda, ending_debt, years, exit_m
 
 
 def get_company_data(ticker):
-    stock = yf.Ticker(ticker, session=yf_session)
-    info = stock.info
+    income_url = f"{FMP_BASE}/income-statement"
+    income_params = {"symbol": ticker, "apikey": FMP_API_KEY}
+    income_response = requests.get(income_url, params=income_params)
+    income_data = income_response.json()
+
+    quote_url = f"{FMP_BASE}/quote"
+    quote_params = {"symbol": ticker, "apikey": FMP_API_KEY}
+    quote_response = requests.get(quote_url, params=quote_params)
+    quote_data = quote_response.json()
+
+    if not income_data or not isinstance(income_data, list) or not quote_data or not isinstance(quote_data, list):
+        return {"net_income": None, "shares": None, "price": None}
+
+    latest_income = income_data[0]
+    latest_quote = quote_data[0]
+
     return {
-        "net_income": info.get("netIncomeToCommon"),
-        "shares": info.get("sharesOutstanding"),
-        "price": info.get("currentPrice")
+        "net_income": latest_income.get("netIncome"),
+        "shares": latest_income.get("weightedAverageShsOutDil") or latest_income.get("weightedAverageShsOut"),
+        "price": latest_quote.get("price")
     }
 
 
 def search_ticker(query):
-    url = "https://query1.finance.yahoo.com/v1/finance/search"
-    params = {"q": query, "quotesCount": 6, "newsCount": 0}
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, params=params, headers=headers)
+    url = f"{FMP_BASE}/search-name"
+    params = {"query": query, "apikey": FMP_API_KEY}
+    response = requests.get(url, params=params)
     data = response.json()
 
     results = []
-    for quote in data.get("quotes", []):
-        symbol = quote.get("symbol")
-        name = quote.get("shortname") or quote.get("longname")
-        if symbol and name:
-            results.append({"symbol": symbol, "name": name})
+    if isinstance(data, list):
+        for item in data[:6]:
+            symbol = item.get("symbol")
+            name = item.get("name")
+            if symbol and name:
+                results.append({"symbol": symbol, "name": name})
     return results
 
 
