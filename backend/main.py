@@ -18,6 +18,14 @@ app.add_middleware(
 # from a cloud host's IP address. Reused across all yfinance calls.
 yf_session = curl_requests.Session(impersonate="chrome")
 
+# Yahoo requires a "crumb" token tied to cookies before it will serve data.
+# Hitting this URL once at startup sets those cookies on our session so
+# later requests aren't rejected with an "Invalid Crumb" error.
+try:
+    yf_session.get("https://fc.yahoo.com")
+except Exception:
+    pass
+
 
 def get_ebitda(ticker):
     stock = yf.Ticker(ticker, session=yf_session)
