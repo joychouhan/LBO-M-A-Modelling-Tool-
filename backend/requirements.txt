@@ -1,6 +1,4 @@
 fastapi
 uvicorn
-yfinance>=0.2.40
 numpy-financial
 requests
-curl_cffi
