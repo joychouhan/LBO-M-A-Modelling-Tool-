@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 import numpy_financial as npf
 import requests
+from curl_cffi import requests as curl_requests
 
 app = FastAPI()
 
@@ -13,9 +14,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# A browser-like session so Yahoo Finance doesn't block requests coming
+# from a cloud host's IP address. Reused across all yfinance calls.
+yf_session = curl_requests.Session(impersonate="chrome")
+
 
 def get_ebitda(ticker):
-    stock = yf.Ticker(ticker)
+    stock = yf.Ticker(ticker, session=yf_session)
     info = stock.info
     return info.get("ebitda")
 
@@ -68,7 +73,7 @@ def calculate_returns(equity_invested, ending_ebitda, ending_debt, years, exit_m
 
 
 def get_company_data(ticker):
-    stock = yf.Ticker(ticker)
+    stock = yf.Ticker(ticker, session=yf_session)
     info = stock.info
     return {
         "net_income": info.get("netIncomeToCommon"),
