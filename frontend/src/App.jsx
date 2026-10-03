@@ -4,6 +4,8 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import './App.css'
 
+const API_BASE = 'https://lbo-m-a-modelling-tool.onrender.com'
+
 function getHeatColor(irr) {
   if (irr < 15) return '#fee2e2'
   if (irr < 20) return '#fed7aa'
@@ -22,7 +24,7 @@ function useCompanySearch(query) {
     }
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/search/${query}`)
+        const response = await fetch(`${API_BASE}/search/${query}`)
         const data = await response.json()
         setSuggestions(data.results || [])
       } catch (err) {
@@ -103,15 +105,15 @@ function App() {
     setGrid2d(null)
     try {
       const params = `multiple=${multiple}&debt_percent=${debtPercent}&growth_rate=${growthRate}&exit_multiple=${exitMultiple}`
-      const lboResponse = await fetch(`http://127.0.0.1:8000/lbo/${ticker}?${params}`)
+      const lboResponse = await fetch(`${API_BASE}/lbo/${ticker}?${params}`)
       const lboData = await lboResponse.json()
       if (lboData.error) { setError(lboData.error); setLoading(false); return }
       setResult(lboData)
       const sensParams = `multiple=${multiple}&debt_percent=${debtPercent}&growth_rate=${growthRate}`
-      const sensResponse = await fetch(`http://127.0.0.1:8000/lbo/${ticker}/sensitivity?${sensParams}`)
+      const sensResponse = await fetch(`${API_BASE}/lbo/${ticker}/sensitivity?${sensParams}`)
       const sensData = await sensResponse.json()
       setSensitivity(sensData.sensitivity)
-      const grid2dResponse = await fetch(`http://127.0.0.1:8000/lbo/${ticker}/sensitivity2d?multiple=${multiple}&growth_rate=${growthRate}`)
+      const grid2dResponse = await fetch(`${API_BASE}/lbo/${ticker}/sensitivity2d?multiple=${multiple}&growth_rate=${growthRate}`)
       const grid2dData = await grid2dResponse.json()
       setGrid2d(grid2dData)
     } catch (err) {
@@ -126,7 +128,7 @@ function App() {
     setMaError('')
     setMaResult(null)
     try {
-      const response = await fetch(`http://127.0.0.1:8000/ma/${acquirerTicker}/${targetTicker}`)
+      const response = await fetch(`${API_BASE}/ma/${acquirerTicker}/${targetTicker}`)
       const data = await response.json()
       if (data.error) { setMaError(data.error) } else { setMaResult(data) }
     } catch (err) {
@@ -152,7 +154,7 @@ function App() {
     setComparisonResult(null)
     try {
       const tickersParam = companyList.join(',')
-      const response = await fetch(`http://127.0.0.1:8000/lbo/compare/${tickersParam}`)
+      const response = await fetch(`${API_BASE}/lbo/compare/${tickersParam}`)
       const data = await response.json()
       if (data.error) { setCompareError(data.error) } else { setComparisonResult(data) }
     } catch (err) {
