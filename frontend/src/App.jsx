@@ -6,6 +6,25 @@ import './App.css'
 
 const API_BASE = 'https://lbo-m-a-modelling-tool.onrender.com'
 
+// Render's free tier puts the backend to sleep after inactivity. The first
+// request after that can fail outright instead of just being slow, because
+// the wake-up response doesn't carry CORS headers yet. This helper retries
+// once after a short wait, which is usually enough for the server to be
+// fully awake and responding normally.
+async function fetchWithRetry(url, retries = 1, delayMs = 5000) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('Request failed')
+    return res
+  } catch (err) {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+      return fetchWithRetry(url, retries - 1, delayMs)
+    }
+    throw err
+  }
+}
+
 function getHeatColor(irr) {
   if (irr < 15) return '#fee2e2'
   if (irr < 20) return '#fed7aa'
@@ -24,7 +43,7 @@ function useCompanySearch(query) {
     }
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`${API_BASE}/search/${query}`)
+        const response = await fetchWithRetry(`${API_BASE}/search/${query}`)
         const data = await response.json()
         setSuggestions(data.results || [])
       } catch (err) {
@@ -73,6 +92,13 @@ function TickerSearchInput({ placeholder, value, onChange, onSelect }) {
 function App() {
   const [activeTab, setActiveTab] = useState('lbo')
 
+  // Wake up the backend the moment the page loads, before the visitor has
+  // even finished typing a company name. This gives Render's free tier a
+  // head start on waking up while they're still filling in the form.
+  useEffect(() => {
+    fetch(`${API_BASE}/`).catch(() => {})
+  }, [])
+
   const [ticker, setTicker] = useState('')
   const [multiple, setMultiple] = useState(8)
   const [debtPercent, setDebtPercent] = useState(0.65)
@@ -105,19 +131,19 @@ function App() {
     setGrid2d(null)
     try {
       const params = `multiple=${multiple}&debt_percent=${debtPercent}&growth_rate=${growthRate}&exit_multiple=${exitMultiple}`
-      const lboResponse = await fetch(`${API_BASE}/lbo/${ticker}?${params}`)
+      const lboResponse = await fetchWithRetry(`${API_BASE}/lbo/${ticker}?${params}`)
       const lboData = await lboResponse.json()
       if (lboData.error) { setError(lboData.error); setLoading(false); return }
       setResult(lboData)
       const sensParams = `multiple=${multiple}&debt_percent=${debtPercent}&growth_rate=${growthRate}`
-      const sensResponse = await fetch(`${API_BASE}/lbo/${ticker}/sensitivity?${sensParams}`)
+      const sensResponse = await fetchWithRetry(`${API_BASE}/lbo/${ticker}/sensitivity?${sensParams}`)
       const sensData = await sensResponse.json()
       setSensitivity(sensData.sensitivity)
-      const grid2dResponse = await fetch(`${API_BASE}/lbo/${ticker}/sensitivity2d?multiple=${multiple}&growth_rate=${growthRate}`)
+      const grid2dResponse = await fetchWithRetry(`${API_BASE}/lbo/${ticker}/sensitivity2d?multiple=${multiple}&growth_rate=${growthRate}`)
       const grid2dData = await grid2dResponse.json()
       setGrid2d(grid2dData)
     } catch (err) {
-      setError('Could not connect to backend server')
+      setError('Server is waking up (this can take up to a minute on the first visit) — please click Calculate again in a few seconds.')
     }
     setLoading(false)
   }
@@ -128,11 +154,11 @@ function App() {
     setMaError('')
     setMaResult(null)
     try {
-      const response = await fetch(`${API_BASE}/ma/${acquirerTicker}/${targetTicker}`)
+      const response = await fetchWithRetry(`${API_BASE}/ma/${acquirerTicker}/${targetTicker}`)
       const data = await response.json()
       if (data.error) { setMaError(data.error) } else { setMaResult(data) }
     } catch (err) {
-      setMaError('Could not connect to backend server')
+      setMaError('Server is waking up (this can take up to a minute on the first visit) — please click Analyze Deal again in a few seconds.')
     }
     setMaLoading(false)
   }
@@ -154,11 +180,11 @@ function App() {
     setComparisonResult(null)
     try {
       const tickersParam = companyList.join(',')
-      const response = await fetch(`${API_BASE}/lbo/compare/${tickersParam}`)
+      const response = await fetchWithRetry(`${API_BASE}/lbo/compare/${tickersParam}`)
       const data = await response.json()
       if (data.error) { setCompareError(data.error) } else { setComparisonResult(data) }
     } catch (err) {
-      setCompareError('Could not connect to backend server')
+      setCompareError('Server is waking up (this can take up to a minute on the first visit) — please click Compare again in a few seconds.')
     }
     setCompareLoading(false)
   }
