@@ -98,20 +98,64 @@ def get_company_data(ticker):
     }
 
 
+# FMP's search only matches on a company's official registered name, not
+# the brand/product name people actually type (e.g. "Google" instead of
+# "Alphabet"). This small alias list catches the most common mismatches
+# and puts the right ticker at the top of the results.
+COMPANY_ALIASES = {
+    "google": ("GOOGL", "Alphabet Inc. (Google)"),
+    "alphabet": ("GOOGL", "Alphabet Inc."),
+    "facebook": ("META", "Meta Platforms Inc. (Facebook)"),
+    "meta": ("META", "Meta Platforms Inc."),
+    "apple": ("AAPL", "Apple Inc."),
+    "microsoft": ("MSFT", "Microsoft Corporation"),
+    "amazon": ("AMZN", "Amazon.com Inc."),
+    "netflix": ("NFLX", "Netflix Inc."),
+    "tesla": ("TSLA", "Tesla Inc."),
+    "intel": ("INTC", "Intel Corporation"),
+    "nvidia": ("NVDA", "NVIDIA Corporation"),
+    "twitter": ("X", "X Corp. (Twitter)"),
+    "disney": ("DIS", "The Walt Disney Company"),
+    "walmart": ("WMT", "Walmart Inc."),
+    "coca cola": ("KO", "The Coca-Cola Company"),
+    "coke": ("KO", "The Coca-Cola Company"),
+    "mcdonalds": ("MCD", "McDonald's Corporation"),
+    "starbucks": ("SBUX", "Starbucks Corporation"),
+    "nike": ("NKE", "Nike Inc."),
+    "visa": ("V", "Visa Inc."),
+    "mastercard": ("MA", "Mastercard Inc."),
+    "paypal": ("PYPL", "PayPal Holdings Inc."),
+    "uber": ("UBER", "Uber Technologies Inc."),
+    "airbnb": ("ABNB", "Airbnb Inc."),
+    "boeing": ("BA", "The Boeing Company"),
+    "jpmorgan": ("JPM", "JPMorgan Chase & Co."),
+    "goldman sachs": ("GS", "The Goldman Sachs Group Inc."),
+    "berkshire": ("BRK-B", "Berkshire Hathaway Inc."),
+}
+
+
 def search_ticker(query):
+    results = []
+    query_lower = query.lower().strip()
+
+    for alias, (symbol, name) in COMPANY_ALIASES.items():
+        if alias in query_lower or query_lower in alias:
+            results.append({"symbol": symbol, "name": name})
+            break
+
     url = f"{FMP_BASE}/search-name"
     params = {"query": query, "apikey": FMP_API_KEY}
     response = requests.get(url, params=params)
     data = response.json()
 
-    results = []
     if isinstance(data, list):
         for item in data[:6]:
             symbol = item.get("symbol")
             name = item.get("name")
-            if symbol and name:
+            if symbol and name and not any(r["symbol"] == symbol for r in results):
                 results.append({"symbol": symbol, "name": name})
-    return results
+
+    return results[:6]
 
 
 def run_lbo_calculation(ticker, multiple, debt_percent, growth_rate, exit_multiple):
